@@ -20,6 +20,7 @@ fn main() -> io::Result<()> {
 
 #[derive(Debug, Default)]
 pub struct App {
+    current_files: Vec<String>,
     counter: u8,
     exit: bool,
 }
@@ -27,6 +28,8 @@ pub struct App {
 impl App {
     /// runs the application's main loop until the user quits
     pub fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
+        self.current_files = self.get_file_paths_on_current_dir()?;
+
         while !self.exit {
             terminal.draw(|frame| self.draw(frame))?;
             self.handle_events()?;
@@ -71,6 +74,18 @@ impl App {
     fn decrement_counter(&mut self) {
         self.counter -= 1;
     }
+
+    fn get_file_paths_on_current_dir(&self) -> io::Result<Vec<String>> {
+        let mut file_paths = vec![];
+        for entry in std::fs::read_dir(".")? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.is_file() {
+                file_paths.push(path.display().to_string());
+            }
+        }
+        Ok(file_paths)
+    }
 }
 
 impl Widget for &App {
@@ -90,8 +105,8 @@ impl Widget for &App {
             .border_set(border::THICK);
 
         let counter_text = Text::from(vec![Line::from(vec![
-            "Value: ".into(),
-            self.counter.to_string().yellow(),
+            "Current File: ".into(),
+            self.current_files[self.counter as usize].clone().bold(),
         ])]);
 
         Paragraph::new(counter_text)
