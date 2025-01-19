@@ -1,117 +1,43 @@
-use std::io;
+use std::{collections::HashMap, fs::DirEntry};
 
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
-use ratatui::{
-    buffer::Buffer,
-    layout::Rect,
-    style::Stylize,
-    symbols::border,
-    text::{Line, Text},
-    widgets::{Block, Paragraph, Widget},
-    DefaultTerminal, Frame,
-};
-
-fn main() -> io::Result<()> {
-    let mut terminal = ratatui::init();
-    let app_result = App::default().run(&mut terminal);
-    ratatui::restore();
-    app_result
+#[derive(Default)]
+struct FileManager {
+    registry_to_folder: HashMap<String, DirEntry>,
+    pub current_entries: Vec<DirEntry>,
 }
 
-#[derive(Debug, Default)]
-pub struct App {
-    current_files: Vec<String>,
-    counter: u8,
-    exit: bool,
-}
-
-impl App {
-    /// runs the application's main loop until the user quits
-    pub fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
-        self.current_files = self.get_file_paths_on_current_dir()?;
-
-        while !self.exit {
-            terminal.draw(|frame| self.draw(frame))?;
-            self.handle_events()?;
-        }
-        Ok(())
+impl FileManager {
+    fn update_entries(&mut self, path: &str) {
+        self.current_entries = std::fs::read_dir(path)
+            .unwrap()
+            .map(|entry| entry.unwrap())
+            .collect();
     }
 
-    fn draw(&self, frame: &mut Frame) {
-        frame.render_widget(self, frame.area());
+    fn get_entries_as_string_vec(&self) -> Vec<String> {
+        self.current_entries
+            .iter()
+            .map(|entry| entry.path().to_str().unwrap().to_string())
+            .collect()
     }
 
-    /// updates the application's state based on user input
-    fn handle_events(&mut self) -> io::Result<()> {
-        match event::read()? {
-            // it's important to check that the event is a key press event as
-            // crossterm also emits key release and repeat events on Windows.
-            Event::Key(key_event) if key_event.kind == KeyEventKind::Press => {
-                self.handle_key_event(key_event)
-            }
-            _ => {}
-        };
-        Ok(())
+    fn attach_folder_to_registry(&mut self, folder_name: &str, folder: DirEntry) {
+        self.registry_to_folder
+            .insert(folder_name.to_string(), folder);
     }
 
-    fn handle_key_event(&mut self, key_event: KeyEvent) {
-        match key_event.code {
-            KeyCode::Char('q') => self.exit(),
-            KeyCode::Left => self.decrement_counter(),
-            KeyCode::Right => self.increment_counter(),
-            _ => {}
-        }
-    }
-
-    fn exit(&mut self) {
-        self.exit = true;
-    }
-
-    fn increment_counter(&mut self) {
-        self.counter += 1;
-    }
-
-    fn decrement_counter(&mut self) {
-        self.counter -= 1;
-    }
-
-    fn get_file_paths_on_current_dir(&self) -> io::Result<Vec<String>> {
-        let mut file_paths = vec![];
-        for entry in std::fs::read_dir(".")? {
-            let entry = entry?;
-            let path = entry.path();
-            if path.is_file() {
-                file_paths.push(path.display().to_string());
-            }
-        }
-        Ok(file_paths)
+    fn get_folders(&self) -> Vec<DirEntry> {
+        self.current_entries
+            .iter()
+            .filter(|entry| entry.path().is_dir())
+            .map(|entry| entry.to_owned())
+            .collect()
     }
 }
 
-impl Widget for &App {
-    fn render(self, area: Rect, buf: &mut Buffer) {
-        let title = Line::from(" Counter App Tutorial ".bold());
-        let instructions = Line::from(vec![
-            " Decrement ".into(),
-            "<Left>".blue().bold(),
-            " Increment ".into(),
-            "<Right>".blue().bold(),
-            " Quit ".into(),
-            "<Q> ".blue().bold(),
-        ]);
-        let block = Block::bordered()
-            .title(title.centered())
-            .title_bottom(instructions.centered())
-            .border_set(border::THICK);
+fn main() {
+    let mut file_manager = FileManager::default();
+    file_manager.update_entries(".");
 
-        let counter_text = Text::from(vec![Line::from(vec![
-            "Current File: ".into(),
-            self.current_files[self.counter as usize].clone().bold(),
-        ])]);
-
-        Paragraph::new(counter_text)
-            .centered()
-            .block(block)
-            .render(area, buf);
-    }
+    println!("{:?}", file_manager.get_entries_as_string_vec());
 }
